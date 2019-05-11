@@ -1,0 +1,8 @@
+package:
+    type:           yii2-extension
+    name:           hiapi-isp
+    title:          hiAPI ISP plugin
+    headline:       hiAPI ISP
+    keywords:       hiapi, hipanel, isp, registrar, domains
+    description:    |
+        ISP integration plugin for hiAPI
