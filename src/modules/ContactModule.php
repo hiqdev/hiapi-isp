@@ -10,32 +10,6 @@ use hiapi\legacy\lib\deps\retrieve;
 
 class ContactModule extends AbstractModule
 {
-    private $countryCodes;
-
-    /**
-     * @param array $row
-     * @param string $type
-     * @return array
-     */
-    private function _contactCreate(array $row, $type = 'org'): array
-    {
-        $res = $this->tool->request([
-            'func'  => 'contcat.create.1',
-            'ctype' => $type == 'person' ? 'person' : 'company',
-            'cname' => $row['id'],
-        ]);
-
-        if (ErrorHelper::is($res)) {
-            throw new IspToolException();
-        }
-        $row = array_merge($row, ['remoteid' => $res['domaincontact.id']]);
-        $res = $this->base->_contactSet($row);
-
-        return ErrorHelper::is($res)
-            ? $res
-            : $this->{"contactUpdate" . ucfirst($type)}($row);
-    }
-
     /**
      * @param array $row
      * @return array
@@ -126,6 +100,30 @@ class ContactModule extends AbstractModule
 
     /**
      * @param array $row
+     * @param string $type
+     * @return array
+     */
+    private function _contactCreate(array $row, $type = 'org'): array
+    {
+        $res = $this->tool->request([
+            'func'  => 'contcat.create.1',
+            'ctype' => $type == 'person' ? 'person' : 'company',
+            'cname' => $row['id'],
+        ]);
+
+        if (ErrorHelper::is($res)) {
+            throw new IspToolException();
+        }
+        $row = array_merge($row, ['remoteid' => $res['domaincontact.id']]);
+        $res = $this->base->_contactSet($row);
+
+        return ErrorHelper::is($res)
+            ? $res
+            : $this->{"contactUpdate" . ucfirst($type)}($row);
+    }
+
+    /**
+     * @param array $row
      * @return array
      */
     protected function _contactExists(array $row): array
@@ -154,6 +152,7 @@ class ContactModule extends AbstractModule
     public function contactUpdateOrg($row)
     {
         $row = $this->_contactPrepare($row);
+
         return $this->tool->request([
             'func'         => 'domaincontact.edit',
             'ctype'        => 'company',

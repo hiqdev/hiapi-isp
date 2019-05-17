@@ -2,6 +2,9 @@
 
 namespace hiapi\isp\modules;
 
+use hiapi\isp\exceptions\IspToolException;
+use hiapi\isp\helpers\ArrayHelper;
+use hiapi\isp\helpers\ErrorHelper;
 use hiapi\isp\IspTool;
 
 class AbstractModule
@@ -11,7 +14,7 @@ class AbstractModule
 
     public $base;
 
-    private $constcodes;
+    protected $constcodes;
 
     public function __construct(IspTool $tool)
     {
@@ -81,5 +84,58 @@ class AbstractModule
         }, 24 * 3600);
 
         $this->constcodes = $data;
+    }
+
+    /**
+     * @param array $row
+     * @return mixed
+     */
+    protected function _domainPrepareRegistrant(array $row)
+    {
+        $cinfo = $this->base->domainGetContactsInfo(ArrayHelper::extract($row, ['domain', 'id']));
+        if (ErrorHelper::is($cinfo)) {
+            throw new IspToolException();
+        }
+        $data = ArrayHelper::has($row, 'whois_protected') ? $row : $cinfo;
+        $row['whois_protected'] = (bool)ArrayHelper::get($data, 'whois_protected');
+        $id = $row['registrant'] ?: $cinfo['registrant']['id'];
+        if (!$id) {
+            throw new IspToolException('wrong registrant');
+        }
+
+        return $this->base->contactGetInfo(compact('id'));
+    }
+
+    /**
+     * @param array $row
+     * @param array $registrant
+     * @return array
+     */
+    protected function _domainSetRegistrant(array $row, array $registrant): array
+    {
+        $remoteid = $registrant['remote'];
+        if (!$remoteid || !$this->tool->contactExists(compact('remoteid'))) {
+            $contact = $this->tool->contactCreate($registrant);
+            if (ErrorHelper::is($contact)) {
+                throw new IspToolException();
+            }
+            $row['registrant'] = $contact['id'];
+        } else {
+            $contactExists = $this->tool->_contactExists(compact('remoteid'));
+            if ($contactExists['error']) {
+                if ($contactExists['error']['code'] != 8) {
+                    throw new IspToolException($contactExists['error']['msg']);
+                }
+            } else {
+                $contact = $this->tool->contactUpdate($registrant);
+                if (ErrorHelper::is($contact)) {
+                    throw new IspToolException();
+                }
+            }
+            $row['registrant'] = $registrant['remote'];
+        }
+        $row['zone'] = retrieve::zone($row['domain']);
+
+        return $row;
     }
 }

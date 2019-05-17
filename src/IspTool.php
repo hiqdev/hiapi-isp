@@ -35,8 +35,6 @@ class IspTool
         $this->base = $base;
         $this->checkConfig($config);
         $this->initTool($config);
-
-        $this->url = 'localhost:7777';
     }
 
     /**
