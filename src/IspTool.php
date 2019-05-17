@@ -2,7 +2,10 @@
 
 namespace hiapi\isp;
 
+use hiapi\isp\exceptions\InvalidCallException;
 use hiapi\isp\exceptions\InvalidConfigException;
+use hiapi\isp\exceptions\IspToolException;
+use hiapi\isp\helpers\ErrorHelper;
 use hiapi\isp\modules\AbstractModule;
 use hiapi\isp\modules\DomainModule;
 
@@ -11,28 +14,34 @@ class IspTool
     /** @var array tool configuration */
     protected $config;
 
-    protected $url;
-    protected $login;
-    protected $password;
-    protected $customer_id;
-    protected $default_nss = ['ns1.topdns.me', 'ns2.topdns.me'];
+    protected $base;
+
+    private $url;
+    private $login;
+    private $password;
+    private $customer_id;
+    private $default_nss = ['ns1.topdns.me', 'ns2.topdns.me'];
+
+    /** @var IspClient */
+    private $client;
 
     protected $modules = [
         'domain'    => DomainModule::class,
     ];
 
-    /**
-     * TODO: remove from construct
-     */
-    protected $base;
 
-    public function __construct($base = null, array $config)
+    public function __construct($base, array $config = [])
     {
-        echo 'hello!';
+        $this->base = $base;
         $this->checkConfig($config);
         $this->initTool($config);
+
+        $this->url = 'localhost:7777';
     }
 
+    /**
+     * @param array $config
+     */
     private function checkConfig(array $config): void
     {
         foreach (['login','password'] as $field) {
@@ -43,6 +52,9 @@ class IspTool
         }
     }
 
+    /**
+     * @param array $config
+     */
     private function initTool(array $config): void
     {
         $fields = array_keys(get_object_vars($this));
@@ -68,6 +80,10 @@ class IspTool
         return call_user_func_array([$module, $command], $args);
     }
 
+    /**
+     * @param string $name
+     * @return AbstractModule
+     */
     public function getModule(string $name): AbstractModule
     {
         if (empty($this->modules[$name])) {
@@ -79,5 +95,63 @@ class IspTool
         }
 
         return $this->modules[$name];
+    }
+
+    /**
+     * @param string $class
+     * @return AbstractModule
+     */
+    public function createModule(string $class): AbstractModule
+    {
+        return new $class($this);
+    }
+
+    /**
+     * @param array $data
+     * @param string $addUrl
+     * @return mixed
+     */
+    public function request (array $data, string $addUrl = 'manager/billmgr')
+    {
+        if (ErrorHelper::is($data)) {
+            throw new IspToolException();
+        }
+        $url = $this->url . $addUrl;
+        if (!$url) {
+            throw new IspToolException('wrong url');
+        }
+        if (!$data || !is_array($data)) {
+            throw new IspToolException('wrong format');
+        }
+        $data = $this->prepareRequest($data);
+        $res = $this->client->request($url, $data);
+
+        return $this->prepareRequestAnswer($res, $data['out']);
+    }
+
+    /**
+     * @param array $data
+     * @return array
+     */
+    public function prepareRequest (array $data): array
+    {
+        $data['sok'] = $data['sok'] ?? 'ok';
+        $data['authinfo'] = "{$this->login}:{$this->password}";
+        $data['out'] = $data['out'] ?? 'json';
+
+        return $data;
+    }
+
+    /**
+     * @return IspClient
+     */
+    public function getIspClient(): IspClient
+    {
+        if ($this->client === null) {
+            $guzzle = new \GuzzleHttp\Client(['base_uri' => $this->url]);
+            $this->client = new IspClient($guzzle);
+        }
+
+        return $this->client;
     }
 }
